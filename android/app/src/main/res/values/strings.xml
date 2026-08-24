@@ -1,0 +1,4 @@
+<resources>
+  <string name="app_name">FocusFriction</string>
+  <string name="accessibility_service_description">FocusFriction needs Accessibility Service to detect when you open a distracting app, so it can display the friction overlay and help you stay focused.</string>
+</resources>

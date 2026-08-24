@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  accessibility_service_config.xml
+  =================================
+
+  Configuration file for the FocusFriction Accessibility Service.
+  This file is referenced from the <meta-data> tag in AndroidManifest.xml
+  within the service declaration.
+
+  SETUP:
+    Place this file at:
+      android/app/src/main/res/xml/accessibility_service_config.xml
+
+  ATTRIBUTES EXPLAINED:
+
+    accessibilityEventTypes="typeWindowStateChanged"
+      Only receive events when a new window (Activity) comes to the foreground.
+      This is the minimal event type needed for foreground app detection.
+      Other options include typeAllMask (all events) but that would be
+      wasteful and a privacy concern.
+
+    accessibilityFeedbackType="feedbackGeneric"
+      Declares the type of feedback this service provides. "feedbackGeneric"
+      is appropriate when the service does not provide audio, haptic, or
+      spoken feedback — it simply observes events.
+
+    accessibilityFlags="flagIncludeNotImportantViews"
+      Include views that the system considers "not important for accessibility"
+      in the event data. This ensures we capture events from all apps,
+      including those that don't fully implement accessibility.
+
+    canRetrieveWindowContent="false"
+      We do NOT need to read the content of app windows. Setting this to false
+      is important for privacy — it signals to the system (and Play Store
+      reviewers) that we're not scraping screen content.
+
+    notificationTimeout="300"
+      Minimum interval (in milliseconds) between consecutive accessibility
+      events delivered to this service. Acts as a debounce to prevent
+      excessive event processing during rapid app switching. 300ms is a
+      reasonable default that balances responsiveness with efficiency.
+
+    description="@string/accessibility_service_description"
+      User-facing description shown in the Accessibility settings screen.
+      This string must be defined in res/values/strings.xml. Make it clear
+      and honest about what the service does and why it needs access.
+
+  IMPORTANT:
+    - Keep canRetrieveWindowContent="false" unless you have a specific need
+      to read window content. Changing this to "true" triggers additional
+      scrutiny during Play Store review.
+    - The description string is critical for user trust and Play Store
+      compliance. It should clearly state the purpose and explicitly note
+      that no personal data is collected.
+
+  @see https://developer.android.com/reference/android/accessibilityservice/AccessibilityServiceInfo
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagIncludeNotImportantViews"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="300"
+    android:description="@string/accessibility_service_description" />

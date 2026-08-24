@@ -1,0 +1,28 @@
+{
+  "name": "focus-friction",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "expo": "~57.0.7",
+    "expo-document-picker": "~57.0.1",
+    "expo-file-system": "~57.0.1",
+    "expo-secure-store": "~57.0.1",
+    "expo-sharing": "~57.0.6",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-draggable-flatlist": "^4.0.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-get-random-values": "~1.11.0",
+    "react-native-reanimated": "4.5.0",
+    "uuid": "^14.0.1"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
