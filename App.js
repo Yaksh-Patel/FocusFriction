@@ -1,244 +1,198 @@
 // App.js
 
 /**
- * FocusFriction — Root Application Component
+ * FocusFriction — root component.
  *
- * Material Expressive three-tab layout with custom bottom navigation bar.
- * Handles store hydration, tab routing, and the InterceptOverlay gate.
+ * Notes are the home surface. Pausing distracting apps is a mode the app offers,
+ * not a gate in front of it: the app is fully useful before any permission is
+ * granted, which is the point of it being a notes app first.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-  TouchableOpacity,
-  Text,
-  View,
-  ActivityIndicator,
-  NativeModules,
-  AppState,
+  StatusBar, StyleSheet, Pressable, Text, View,
+  ActivityIndicator, AppState,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Theme from './src/theme';
-import HomeScreen from './src/components/HomeScreen';
-import SetupScreen from './src/components/SetupScreen';
-import AppSelectorScreen from './src/components/AppSelectorScreen';
-import SettingsScreen from './src/components/SettingsScreen';
-import InterventionScreen from './src/screens/InterventionScreen';
-import taskStore from './src/core/taskStore';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { ThemeProvider, useTheme } from './src/theme';
+import Icon from './src/components/Icon';
+import NotesScreen from './src/screens/NotesScreen';
+import FocusScreen from './src/screens/FocusScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+
+import appStorage from './src/core/appStorage';
+import notesStore from './src/core/notesStore';
 import appStore from './src/core/appStore';
 import settingsStore from './src/core/settingsStore';
-import appStorage from './src/core/appStorage';
-
-const { colors, typography, shapes, spacing } = Theme;
-
-// ─── Tab Definitions ──────────────────────────────────────────────────────
+import sessionManager from './src/core/sessionManager';
+import nativeBridge from './src/core/nativeBridge';
 
 const TABS = [
-  { key: 'home', label: 'Home', icon: '🏠' },
-  { key: 'apps', label: 'Apps', icon: '🛡' },
-  { key: 'settings', label: 'Settings', icon: '⚙' },
+  { key: 'notes', label: 'Notes', icon: 'notes' },
+  { key: 'focus', label: 'Focus', icon: 'shield' },
+  { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
-// ─── App Component ────────────────────────────────────────────────────────
+// ─── Shell ────────────────────────────────────────────────────────────────
 
-export default function App() {
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [activeTab, setActiveTab] = useState('home');
-  const [interventionData, setInterventionData] = useState(null);
+function AppShell() {
+  const { colors, typography, spacing, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
-  // ─── Hydrate all stores ──────────────────────────────────────────────
+  const [hydrated, setHydrated] = useState(false);
+  const [activeTab, setActiveTab] = useState('notes');
+  const [initialNoteId, setInitialNoteId] = useState(null);
 
+  // ── Hydrate ──
   useEffect(() => {
-    const hydrate = async () => {
+    (async () => {
       try {
         await appStorage.init();
         await Promise.all([
-          taskStore.init(),
           appStore.init(),
           settingsStore.init(),
+          sessionManager.init(),
+          notesStore.init(),
         ]);
+        // Only now is the monitored list real. Syncing earlier could push an
+        // empty set to native and silently disable pausing.
+        await settingsStore.syncNative();
       } catch (error) {
-        console.warn('[App] Hydration error:', error);
+        console.warn('[App] Hydration failed:', error);
       } finally {
-        setIsHydrated(true);
+        setHydrated(true);
       }
-    };
-    hydrate();
+    })();
   }, []);
 
-  // ─── Deep Link / Native Intent Listener ──────────────────────────────
-  // Check for active intervention whenever app comes to foreground
+  // ── Sync with whatever the overlay did while JS was not running ──
+  // It records outcomes and, if you tapped a heading, which note to open.
   useEffect(() => {
-    const checkIntervention = async () => {
-      try {
-        const { InterventionModule } = NativeModules;
-        if (!InterventionModule) return;
-        const data = await InterventionModule.getActiveIntervention();
-        if (data && data.sessionId) {
-          setInterventionData(data);
-        }
-      } catch (e) {
-        console.warn('[App] Failed to check intervention:', e);
+    if (!hydrated) return undefined;
+
+    const sync = async () => {
+      await sessionManager.syncFromNative();
+      // '' means "just show notes"; a non-empty value means open that note.
+      // null means the overlay didn't ask for anything, so don't navigate.
+      const pending = await nativeBridge.consumePendingOpen();
+      if (pending !== null && pending !== undefined) {
+        setActiveTab('notes');
+        if (pending) setInitialNoteId(pending);
       }
     };
 
-    checkIntervention();
+    sync();
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') checkIntervention();
+      if (state === 'active') sync();
     });
     return () => sub.remove();
-  }, [isHydrated]);
+  }, [hydrated]);
 
-  // ─── Loading ─────────────────────────────────────────────────────────
+  const consumeInitialNote = useCallback(() => setInitialNoteId(null), []);
 
-  if (!isHydrated) {
+  if (!hydrated) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaView style={styles.loadingContainer}>
-          <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading FocusFriction...</Text>
-        </SafeAreaView>
-      </GestureHandlerRootView>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <StatusBar
+          barStyle={isDark ? 'light-content' : 'dark-content'}
+          translucent
+          backgroundColor="transparent"
+        />
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
     );
   }
 
-  // ─── Tab Content ─────────────────────────────────────────────────────
-
-  const renderTabContent = () => {
-    const isSetupComplete = settingsStore.isProtectionEnabled();
+  const renderTab = () => {
     switch (activeTab) {
-      case 'home':
-        return isSetupComplete ? <HomeScreen /> : <SetupScreen />;
-      case 'apps':
-        return <AppSelectorScreen />;
+      case 'focus':
+        return <FocusScreen />;
       case 'settings':
         return <SettingsScreen />;
+      case 'notes':
       default:
-        return isSetupComplete ? <HomeScreen /> : <SetupScreen />;
+        return (
+          <NotesScreen
+            initialNoteId={initialNoteId}
+            onConsumeInitialNote={consumeInitialNote}
+          />
+        );
     }
   };
 
-  // ─── Render ──────────────────────────────────────────────────────────
-
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        translucent
+        backgroundColor="transparent"
+      />
 
-        {interventionData !== null ? (
-          <InterventionScreen 
-            interventionData={interventionData} 
-            onComplete={() => setInterventionData(null)} 
-          />
-        ) : (
-          <View style={{ flex: 1 }}>
-            {renderTabContent()}
+      <View style={{ flex: 1 }}>{renderTab()}</View>
 
-            {/* ── Bottom Tab Bar ────────────────────────────────────────── */}
-            <View style={styles.tabBar}>
-              {TABS.map((tab) => {
-                const isActive = activeTab === tab.key;
-                return (
-                  <TouchableOpacity
-                    key={tab.key}
-                    style={styles.tabItem}
-                    onPress={() => setActiveTab(tab.key)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.tabPill, isActive && styles.tabPillActive]}>
-                      <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>
-                        {tab.icon}
-                      </Text>
-                    </View>
-                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                      {tab.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
-      </SafeAreaView>
-    </GestureHandlerRootView>
+      {/* Bottom navigation. paddingBottom clears the gesture bar or the
+          three-button nav, whichever this device uses. */}
+      <View style={{
+        flexDirection: 'row',
+        backgroundColor: colors.surfaceContainer,
+        paddingTop: spacing.sm,
+        paddingBottom: spacing.sm + insets.bottom,
+      }}>
+        {TABS.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={() => setActiveTab(tab.key)}
+              style={{ flex: 1, alignItems: 'center', gap: 3 }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={tab.label}
+            >
+              <View style={{
+                width: 64,
+                height: 32,
+                borderRadius: 16,
+                overflow: 'hidden',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: active ? colors.secondaryContainer : 'transparent',
+              }}>
+                <Icon
+                  name={tab.icon}
+                  size={22}
+                  color={active ? colors.onSecondaryContainer : colors.onSurfaceVariant}
+                />
+              </View>
+              <Text style={[typography.labelSmall, {
+                color: active ? colors.onSurface : colors.onSurfaceVariant,
+              }]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
-// ─── Styles ─────────────────────────────────────────────────────────────
+// ─── Root ─────────────────────────────────────────────────────────────────
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider>
+          <AppShell />
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
+  );
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  loadingText: {
-    ...typography.bodyMedium,
-    color: colors.onSurfaceVariant,
-  },
-
-  // Snackbar
-  snackbar: {
-    position: 'absolute',
-    bottom: 100,
-    left: spacing.xl,
-    right: spacing.xl,
-    backgroundColor: colors.inverseSurface,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: shapes.medium,
-    alignItems: 'center',
-    elevation: 6,
-  },
-  snackbarText: {
-    ...typography.bodyMedium,
-    color: colors.inverseOnSurface,
-    fontWeight: '500',
-  },
-
-  // Tab Bar — Material You pill style
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceContainer,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-    borderTopWidth: 0,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  tabPill: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: shapes.full,
-  },
-  tabPillActive: {
-    backgroundColor: colors.secondaryContainer,
-  },
-  tabIcon: {
-    fontSize: 20,
-    opacity: 0.5,
-  },
-  tabIconActive: {
-    opacity: 1,
-  },
-  tabLabel: {
-    ...typography.labelSmall,
-    color: colors.onSurfaceVariant,
-  },
-  tabLabelActive: {
-    color: colors.onSurface,
-    fontWeight: '700',
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });
