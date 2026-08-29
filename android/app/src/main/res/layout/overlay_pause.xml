@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The pause overlay. Added by FocusAccessibilityService as a
-  TYPE_ACCESSIBILITY_OVERLAY window, so it sits above the app being paused and
-  cannot be suppressed by setHideOverlayWindows().
+  The pause screen, hosted by PauseActivity. It was a TYPE_ACCESSIBILITY_OVERLAY
+  window until that turned out to sit above the status bar, nav bar and keyguard,
+  which trapped the user on it.
 -->
-<com.focusfriction.OverlayRootView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/ff_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -233,4 +233,4 @@
 
         </LinearLayout>
     </ScrollView>
-</com.focusfriction.OverlayRootView>
+</FrameLayout>

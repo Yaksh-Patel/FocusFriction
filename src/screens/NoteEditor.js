@@ -117,11 +117,17 @@ export default function NoteEditor({ note, onClose, onDelete }) {
   // Hardware back must save too, not discard.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If a close is already latched (a delete that failed, say), let back out
+      // regardless. Swallowing it here is what made the editor unescapable.
+      if (closing.current) {
+        onClose();
+        return true;
+      }
       close();
       return true;
     });
     return () => sub.remove();
-  }, [close]);
+  }, [close, onClose]);
 
   // ─── Checklist helpers ──────────────────────────────────────────────────
 

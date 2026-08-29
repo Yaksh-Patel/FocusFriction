@@ -1,6 +1,7 @@
 package com.focusfriction
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 
 /**
@@ -26,12 +27,9 @@ class FocusAccessibilityService : AccessibilityService() {
     private val debounceMs = 700L
     private val maxTrackedPackages = 64
 
-    private var overlay: FocusOverlayController? = null
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         isConnected = true
-        overlay = FocusOverlayController(this)
         lastEventByPackage.clear()
         FocusPolicyRepository.getInstance(applicationContext).pruneExpiredUnlocks()
     }
@@ -42,17 +40,11 @@ class FocusAccessibilityService : AccessibilityService() {
         val packageId = event.packageName?.toString()?.trim().orEmpty()
         if (packageId.isBlank()) return
 
-        val controller = overlay ?: return
-
         // Our own windows must never drive the state machine.
         if (packageId == packageName) return
 
-        // While the pause is up, ignore the world. The app it concerns has been
-        // sent to the background, so every window event now describes the
-        // launcher or a system surface — none of which mean the user decided
-        // anything. The overlay comes down only through an explicit choice, BACK,
-        // or its own safety timeout.
-        if (controller.isShowing) return
+        // A pause is already on screen; don't stack another.
+        if (PauseActivity.isShowing) return
 
         val now = System.currentTimeMillis()
         val last = lastEventByPackage[packageId] ?: 0L
@@ -73,24 +65,30 @@ class FocusAccessibilityService : AccessibilityService() {
             packageId
         }
 
-        controller.show(packageId, label)
+        // Accessibility services are exempt from background-activity-launch limits.
+        try {
+            startActivity(Intent(this, PauseActivity::class.java).apply {
+                putExtra(PauseActivity.EXTRA_PACKAGE_ID, packageId)
+                putExtra(PauseActivity.EXTRA_APP_LABEL, label)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            })
+        } catch (e: Exception) {
+            // Nothing to fall back to; the next window change will try again.
+        }
     }
 
     override fun onInterrupt() {
-        overlay?.hide()
+        // Nothing to tear down: the pause screen is an Activity with its own
+        // lifecycle, not a window this service holds.
     }
 
-    override fun onUnbind(intent: android.content.Intent?): Boolean {
+    override fun onUnbind(intent: Intent?): Boolean {
         isConnected = false
-        overlay?.hide()
-        overlay = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         isConnected = false
-        overlay?.hide()
-        overlay = null
         super.onDestroy()
     }
 }

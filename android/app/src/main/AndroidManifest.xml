@@ -26,6 +26,14 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
     </activity>
+    <activity
+      android:name=".PauseActivity"
+      android:exported="false"
+      android:theme="@style/Theme.App.Pause"
+      android:launchMode="singleTask"
+      android:excludeFromRecents="true"
+      android:screenOrientation="portrait"
+      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize"/>
     <service android:name=".FocusAccessibilityService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
       <intent-filter>
         <action android:name="android.accessibilityservice.AccessibilityService"/>

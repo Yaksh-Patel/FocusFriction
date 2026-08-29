@@ -3,6 +3,8 @@
     <!-- The pause overlay has its own restrained palette, deliberately distinct
          from the app so it never reads as "the app followed me here". -->
     <color name="ff_scrim">#E60B0C10</color>
+    <!-- Opaque ground for PauseActivity; ff_scrim is deliberately translucent. -->
+    <color name="ff_window">#0B0C10</color>
     <color name="ff_card">#16181D</color>
     <color name="ff_card_raised">#212429</color>
     <color name="ff_input">#1B1E23</color>

@@ -40,13 +40,22 @@ class NotesStore {
     this.hydrated = false;
     this.schemaReady = false;
     this.initError = null;
+    // One shared open promise. expo-sqlite throws NullPointerException from
+    // prepareAsync when the same database is opened more than once, and two
+    // call sites racing on `db == null` was enough to trigger it.
+    this._dbPromise = null;
+  }
+
+  _openDb() {
+    if (!this._dbPromise) this._dbPromise = SQLite.openDatabaseAsync(DB_NAME);
+    return this._dbPromise;
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────
 
   async init() {
     try {
-      this.db = await SQLite.openDatabaseAsync(DB_NAME);
+      this.db = await this._openDb();
       await this._ensureSchema();
       await this._migrateLegacyTasks();
       await this._reload();
@@ -112,9 +121,29 @@ class NotesStore {
    */
   async _requireDb() {
     if (this.db && this.schemaReady) return;
-    this.db = this.db || await SQLite.openDatabaseAsync(DB_NAME);
+    this.db = await this._openDb();
     await this._ensureSchema();
     if (this.notes.length === 0) await this._reload();
+  }
+
+  /**
+   * Every write goes through here. If the native handle has gone bad — which
+   * surfaces as "NativeDatabase.prepareAsync has been rejected / NullPointer" —
+   * drop the connection and retry once against a fresh one, rather than failing
+   * the user's note.
+   */
+  async _run(sql, params) {
+    await this._requireDb();
+    try {
+      return await this.db.runAsync(sql, params);
+    } catch (error) {
+      console.warn('[NotesStore] Write failed, reopening database:', error);
+      this._dbPromise = null;
+      this.db = null;
+      this.schemaReady = false;
+      await this._requireDb();
+      return this.db.runAsync(sql, params);
+    }
   }
 
   /**
@@ -239,7 +268,7 @@ class NotesStore {
 
     note.sortOrder = this._nextSortOrder();
 
-    await this.db.runAsync(
+    await this._run(
       `INSERT INTO notes (id, title, body, items, color, labels, pinned, archived, created_at, updated_at, sort_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
       [note.id, note.title, note.body, JSON.stringify(note.items),
@@ -258,7 +287,7 @@ class NotesStore {
 
     const next = { ...existing, ...patch, updatedAt: now() };
 
-    await this.db.runAsync(
+    await this._run(
       `UPDATE notes SET title = ?, body = ?, items = ?, color = ?, labels = ?,
          pinned = ?, archived = ?, updated_at = ?, sort_order = ? WHERE id = ?`,
       [next.title, next.body, JSON.stringify(next.items), next.color,
@@ -275,7 +304,7 @@ class NotesStore {
     await this._requireDb();
     const note = this.getNote(id);
     if (!note) return null;
-    await this.db.runAsync(`DELETE FROM notes WHERE id = ?`, [id]);
+    await this._run(`DELETE FROM notes WHERE id = ?`, [id]);
     this.notes = this.notes.filter(n => n.id !== id);
     await this._afterWrite();
     return note;   // returned so the caller can offer an undo
@@ -285,7 +314,7 @@ class NotesStore {
   async restoreNote(note) {
     if (!note || !note.id) return;
     await this._requireDb();
-    await this.db.runAsync(
+    await this._run(
       `INSERT OR REPLACE INTO notes (id, title, body, items, color, labels, pinned, archived, created_at, updated_at, sort_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [note.id, note.title, note.body, JSON.stringify(note.items), note.color,

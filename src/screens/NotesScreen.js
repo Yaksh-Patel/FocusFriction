@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  View, Text, TextInput, Pressable, ScrollView, useWindowDimensions, Alert,
+  View, Text, TextInput, Pressable, ScrollView, useWindowDimensions, Modal,
 } from 'react-native';
 import { useTheme } from '../theme';
 import Icon from '../components/Icon';
@@ -164,6 +164,111 @@ const NoteCard = ({ note, tint, theme, onPress, onLongPress, onToggleItem }) => 
   );
 };
 
+// ─── Long-press action sheet ──────────────────────────────────────────────
+
+/**
+ * A real sheet rather than Alert.alert: Android caps alerts at three buttons and
+ * silently drops the rest, which is why Delete never appeared.
+ */
+const NoteActionSheet = ({ note, theme, onClose, onDeleted }) => {
+  const { colors, typography, spacing, shapes } = theme;
+
+  const run = async (fn) => {
+    onClose();
+    try {
+      await fn();
+    } catch (error) {
+      console.error('[NotesScreen] Action failed:', error);
+    }
+  };
+
+  const actions = [
+    {
+      icon: 'pin',
+      label: note.pinned ? 'Unpin' : 'Pin to top',
+      onPress: () => run(() => notesStore.togglePin(note.id)),
+    },
+    {
+      icon: 'undo',
+      label: 'Move to top',
+      onPress: () => run(() => notesStore.moveToTop(note.id)),
+    },
+    {
+      icon: note.archived ? 'unarchive' : 'archive',
+      label: note.archived ? 'Unarchive' : 'Archive',
+      onPress: () => run(() => notesStore.toggleArchive(note.id)),
+    },
+    {
+      icon: 'delete',
+      label: 'Delete',
+      destructive: true,
+      onPress: () => run(async () => {
+        const removed = await notesStore.deleteNote(note.id);
+        if (removed) onDeleted(removed);
+      }),
+    },
+  ];
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' }}
+        onPress={onClose}
+        accessibilityLabel="Close menu"
+      >
+        <Pressable
+          style={{
+            backgroundColor: colors.surfaceContainerHigh,
+            borderTopLeftRadius: shapes.extraLarge,
+            borderTopRightRadius: shapes.extraLarge,
+            paddingTop: spacing.lg,
+            paddingBottom: spacing.xxxl,
+          }}
+          onPress={() => {}}
+        >
+          <Text
+            style={[typography.titleMedium, {
+              color: colors.onSurface,
+              paddingHorizontal: spacing.xl,
+              paddingBottom: spacing.md,
+            }]}
+            numberOfLines={1}
+          >
+            {note.title || 'Untitled note'}
+          </Text>
+
+          {actions.map((action) => (
+            <Pressable
+              key={action.label}
+              onPress={action.onPress}
+              android_ripple={{ color: colors.onSurface + '14' }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.lg,
+                paddingVertical: spacing.lg,
+                paddingHorizontal: spacing.xl,
+              }}
+              accessibilityRole="button"
+            >
+              <Icon
+                name={action.icon}
+                size={21}
+                color={action.destructive ? colors.error : colors.onSurfaceVariant}
+              />
+              <Text style={[typography.bodyLarge, {
+                color: action.destructive ? colors.error : colors.onSurface,
+              }]}>
+                {action.label}
+              </Text>
+            </Pressable>
+          ))}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
+
 // ─── Screen ───────────────────────────────────────────────────────────────
 
 export default function NotesScreen({ initialNoteId, onConsumeInitialNote }) {
@@ -176,6 +281,7 @@ export default function NotesScreen({ initialNoteId, onConsumeInitialNote }) {
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState(null);      // note object, or 'new'
   const [undoNote, setUndoNote] = useState(null);
+  const [menuNote, setMenuNote] = useState(null);
 
   useEffect(() => {
     const unsub = notesStore.subscribe(() => {
@@ -212,43 +318,22 @@ export default function NotesScreen({ initialNoteId, onConsumeInitialNote }) {
   }, []);
 
   const handleDelete = useCallback(async (id) => {
-    const removed = await notesStore.deleteNote(id);
-    setEditing(null);
-    if (removed) {
-      setUndoNote(removed);
-      setTimeout(() => setUndoNote(cur => (cur?.id === removed.id ? null : cur)), 6000);
+    try {
+      const removed = await notesStore.deleteNote(id);
+      if (removed) {
+        setUndoNote(removed);
+        setTimeout(() => setUndoNote(cur => (cur?.id === removed.id ? null : cur)), 6000);
+      }
+    } catch (error) {
+      // A failed delete used to leave the editor open with its close path already
+      // latched, so back did nothing and the app had to be killed.
+      console.error('[NotesScreen] Delete failed:', error);
+    } finally {
+      setEditing(null);
     }
   }, []);
 
-  const handleLongPress = useCallback((note) => {
-    const options = [
-      {
-        text: note.pinned ? 'Unpin' : 'Pin to top',
-        onPress: () => notesStore.togglePin(note.id),
-      },
-      {
-        text: 'Move to top',
-        onPress: () => notesStore.moveToTop(note.id),
-      },
-      {
-        text: note.archived ? 'Unarchive' : 'Archive',
-        onPress: () => notesStore.toggleArchive(note.id),
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const removed = await notesStore.deleteNote(note.id);
-          if (removed) {
-            setUndoNote(removed);
-            setTimeout(() => setUndoNote(cur => (cur?.id === removed.id ? null : cur)), 6000);
-          }
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ];
-    Alert.alert(note.title || 'Untitled note', null, options, { cancelable: true });
-  }, []);
+  const handleLongPress = useCallback((note) => setMenuNote(note), []);
 
   const renderGrid = (list) => {
     const columns = packColumns(list, columnCount, columnWidth);
@@ -424,6 +509,18 @@ export default function NotesScreen({ initialNoteId, onConsumeInitialNote }) {
       >
         <Icon name="add" size={28} color={colors.onPrimaryContainer} />
       </Pressable>
+
+      {menuNote && (
+        <NoteActionSheet
+          note={menuNote}
+          theme={theme}
+          onClose={() => setMenuNote(null)}
+          onDeleted={(removed) => {
+            setUndoNote(removed);
+            setTimeout(() => setUndoNote(cur => (cur?.id === removed.id ? null : cur)), 6000);
+          }}
+        />
+      )}
 
       {editing && (
         <NoteEditor
