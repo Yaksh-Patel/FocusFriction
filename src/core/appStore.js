@@ -67,14 +67,19 @@ class AppStore {
    * @param {Array<{packageId: string, label: string, isSystemApp: boolean}>} nativeApps
    */
   setNativeAppList(nativeApps) {
-    this.allApps = nativeApps
-      .filter(app => !EXCLUDED_PACKAGES.has(app.packageName))
-      .map(app => ({
-        packageId: app.packageName,
-        label: app.appName || app.packageName,
-        isSystemApp: !!app.isSystemApp,
-        isSelected: this.selectedApps.has(app.packageName),
-      }));
+    this.allApps = (Array.isArray(nativeApps) ? nativeApps : [])
+      // Normalise first — the native module sends `packageName`/`appName`, but callers
+      // (and restored backups) may hand us already-normalised rows.
+      .map(app => {
+        const packageId = app.packageId || app.packageName;
+        return {
+          packageId,
+          label: app.label || app.appName || packageId,
+          isSystemApp: !!app.isSystemApp,
+          isSelected: this.selectedApps.has(packageId),
+        };
+      })
+      .filter(app => app.packageId && !EXCLUDED_PACKAGES.has(app.packageId));
     this._notify();
   }
 

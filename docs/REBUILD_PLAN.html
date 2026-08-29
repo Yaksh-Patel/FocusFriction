@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FocusFriction Rebuild</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+:root{
+  --paper:#F5F5F8;
+  --surface:#FFFFFF;
+  --surface-sunk:#EDEDF2;
+  --ink:#17181D;
+  --ink-soft:#3D3F4A;
+  --muted:#6C6E7A;
+  --rule:#DDDDE4;
+  --rule-soft:#E9E9EF;
+  --accent:#B4741A;
+  --accent-ink:#8A570E;
+  --accent-wash:#F7EEDF;
+  --critical:#A63D40;
+  --critical-wash:#F7E7E7;
+  --major:#8A6A1F;
+  --major-wash:#F5EEDD;
+  --minor:#4A5C86;
+  --minor-wash:#E8EBF3;
+  --done:#3F7A5E;
+  --done-wash:#E3F0E9;
+  --shadow:0 1px 2px rgba(23,24,29,.05), 0 8px 24px -12px rgba(23,24,29,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#121317;
+    --surface:#1A1B21;
+    --surface-sunk:#0E0F13;
+    --ink:#E8E8EC;
+    --ink-soft:#C2C4CE;
+    --muted:#9395A2;
+    --rule:#2C2E37;
+    --rule-soft:#23252C;
+    --accent:#E5A551;
+    --accent-ink:#F2C98A;
+    --accent-wash:#251E12;
+    --critical:#E08386;
+    --critical-wash:#2A1618;
+    --major:#D8B15E;
+    --major-wash:#241E10;
+    --minor:#9BB0DC;
+    --minor-wash:#171B26;
+    --done:#7FC4A0;
+    --done-wash:#13221B;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121317;
+  --surface:#1A1B21;
+  --surface-sunk:#0E0F13;
+  --ink:#E8E8EC;
+  --ink-soft:#C2C4CE;
+  --muted:#9395A2;
+  --rule:#2C2E37;
+  --rule-soft:#23252C;
+  --accent:#E5A551;
+  --accent-ink:#F2C98A;
+  --accent-wash:#251E12;
+  --critical:#E08386;
+  --critical-wash:#2A1618;
+  --major:#D8B15E;
+  --major-wash:#241E10;
+  --minor:#9BB0DC;
+  --minor-wash:#171B26;
+  --done:#7FC4A0;
+  --done-wash:#13221B;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+img{max-width:100%;}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Source Serif 4",Georgia,"Times New Roman",serif;
+  font-size:17px;
+  line-height:1.62;
+  margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+
+.wrap{
+  max-width:820px;
+  margin:0 auto;
+  padding:0 28px 96px;
+}
+
+/* ---------- masthead ---------- */
+
+.masthead{
+  padding:72px 0 40px;
+  border-bottom:1px solid var(--rule);
+  display:flex;
+  flex-direction:column;
+  gap:22px;
+}
+.hatch{
+  height:9px;
+  width:104px;
+  border-radius:1px;
+  background-image:repeating-linear-gradient(
+    115deg,
+    var(--accent) 0 3px,
+    transparent 3px 10px
+  );
+  opacity:.85;
+}
+.eyebrow{
+  font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.7rem;
+  font-weight:600;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  align-items:center;
+}
+h1{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-weight:700;
+  font-size:clamp(2.15rem,5.4vw,3.15rem);
+  line-height:1.04;
+  letter-spacing:-.028em;
+  margin:0;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:1.18rem;
+  line-height:1.55;
+  color:var(--ink-soft);
+  margin:0;
+  max-width:60ch;
+  text-wrap:pretty;
+}
+
+/* ---------- sections ---------- */
+
+section{
+  padding-top:56px;
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+}
+h2{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-weight:700;
+  font-size:1.6rem;
+  line-height:1.2;
+  letter-spacing:-.017em;
+  margin:0;
+  text-wrap:balance;
+}
+h3{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-weight:600;
+  font-size:1.06rem;
+  line-height:1.35;
+  letter-spacing:-.006em;
+  margin:0;
+}
+p{margin:0;max-width:66ch;text-wrap:pretty;}
+.lede{color:var(--ink-soft);}
+strong{font-weight:600;color:var(--ink);}
+em{font-style:italic;}
+
+code{
+  font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.84em;
+  background:var(--surface-sunk);
+  border:1px solid var(--rule-soft);
+  border-radius:4px;
+  padding:.08em .34em;
+  color:var(--ink-soft);
+  word-break:break-word;
+}
+
+.section-rule{
+  border:0;
+  border-top:1px solid var(--rule);
+  margin:0;
+}
+
+/* ---------- root cause ---------- */
+
+.finding{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:10px;
+  box-shadow:var(--shadow);
+  padding:26px 28px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.finding-label{
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.68rem;
+  font-weight:600;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent-ink);
+}
+.chain{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.78rem;
+  line-height:1.4;
+}
+.node{
+  background:var(--surface-sunk);
+  border:1px solid var(--rule);
+  border-radius:5px;
+  padding:5px 9px;
+  color:var(--ink-soft);
+}
+.node.bad{
+  background:var(--critical-wash);
+  border-color:var(--critical);
+  color:var(--critical);
+  font-weight:600;
+}
+.arrow{color:var(--muted);}
+
+ol.consequences{
+  margin:0;
+  padding:0;
+  list-style:none;
+  counter-reset:conseq;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+ol.consequences>li{
+  counter-increment:conseq;
+  display:grid;
+  grid-template-columns:26px 1fr;
+  gap:12px;
+  align-items:start;
+}
+ol.consequences>li::before{
+  content:counter(conseq);
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.72rem;
+  font-weight:600;
+  color:var(--accent-ink);
+  background:var(--accent-wash);
+  border-radius:50%;
+  width:23px;
+  height:23px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:3px;
+}
+
+/* ---------- defect table ---------- */
+
+.table-scroll{
+  overflow-x:auto;
+  border:1px solid var(--rule);
+  border-radius:10px;
+  background:var(--surface);
+  box-shadow:var(--shadow);
+}
+table{
+  border-collapse:collapse;
+  width:100%;
+  min-width:660px;
+  font-size:.93rem;
+}
+thead th{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-size:.68rem;
+  font-weight:700;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+  color:var(--muted);
+  text-align:left;
+  padding:14px 18px;
+  border-bottom:1px solid var(--rule);
+  background:var(--surface-sunk);
+  white-space:nowrap;
+}
+tbody td{
+  padding:15px 18px;
+  border-bottom:1px solid var(--rule-soft);
+  vertical-align:top;
+  line-height:1.5;
+}
+tbody tr:last-child td{border-bottom:0;}
+tbody td:first-child{width:34%;}
+tbody td:last-child{color:var(--ink-soft);}
+
+.sev{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.66rem;
+  font-weight:600;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  padding:3px 8px 3px 6px;
+  border-radius:20px;
+  white-space:nowrap;
+}
+.sev::before{
+  content:"";
+  width:6px;height:6px;border-radius:50%;
+  background:currentColor;
+}
+.sev.critical{color:var(--critical);background:var(--critical-wash);}
+.sev.major{color:var(--major);background:var(--major-wash);}
+.sev.minor{color:var(--minor);background:var(--minor-wash);}
+
+/* ---------- phases ---------- */
+
+.phases{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.phase{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:10px;
+  box-shadow:var(--shadow);
+  padding:24px 26px;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:6px 20px;
+  align-items:start;
+}
+.phase-num{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-weight:700;
+  font-size:1.5rem;
+  line-height:1;
+  letter-spacing:-.03em;
+  color:var(--rule);
+  grid-row:1 / span 3;
+  padding-top:2px;
+  font-variant-numeric:tabular-nums;
+}
+.phase.active .phase-num{color:var(--accent);}
+.phase .phase-num{color:var(--done);}
+.phase-head{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px 12px;
+}
+.status{
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.63rem;
+  font-weight:600;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+  padding:3px 9px;
+  border-radius:20px;
+  border:1px solid currentColor;
+  white-space:nowrap;
+}
+.status.now{color:var(--accent-ink);background:var(--accent-wash);}
+.status.queued{color:var(--muted);}
+.status.done{color:var(--done);background:var(--done-wash);}
+.phase-body{
+  color:var(--ink-soft);
+  font-size:.97rem;
+  max-width:64ch;
+}
+.phase-dep{
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.7rem;
+  letter-spacing:.04em;
+  color:var(--muted);
+  padding-top:2px;
+}
+
+/* ---------- decisions ---------- */
+
+.decisions{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(232px,1fr));
+  gap:14px;
+}
+.decision{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:10px;
+  padding:19px 20px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.decision dt{
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.66rem;
+  font-weight:600;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin:0;
+}
+.decision dd{
+  margin:0;
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-weight:600;
+  font-size:1rem;
+  line-height:1.3;
+  letter-spacing:-.008em;
+}
+.decision .why{
+  font-size:.88rem;
+  line-height:1.5;
+  color:var(--muted);
+  font-family:"Source Serif 4",Georgia,serif;
+  font-weight:400;
+  letter-spacing:0;
+}
+
+/* ---------- aside ---------- */
+
+.aside{
+  border-left:2px solid var(--accent);
+  background:var(--accent-wash);
+  border-radius:0 8px 8px 0;
+  padding:22px 24px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.aside h3{color:var(--accent-ink);}
+.aside p{font-size:.96rem;color:var(--ink-soft);}
+
+/* ---------- footer ---------- */
+
+footer{
+  margin-top:64px;
+  padding-top:24px;
+  border-top:1px solid var(--rule);
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:.7rem;
+  letter-spacing:.05em;
+  color:var(--muted);
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px 16px;
+}
+
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px;}
+a:focus-visible,summary:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+  border-radius:3px;
+}
+
+@media (max-width:560px){
+  body{font-size:16px;}
+  .wrap{padding:0 20px 72px;}
+  .masthead{padding:48px 0 32px;}
+  .phase{padding:20px;grid-template-columns:1fr;gap:10px;}
+  .phase-num{grid-row:auto;font-size:1.15rem;}
+  .finding{padding:20px;}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none !important;transition:none !important;}
+}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="hatch" aria-hidden="true"></div>
+    <div class="eyebrow">
+      <span>Android &middot; Expo SDK 57 &middot; Kotlin</span>
+      <span>Reviewed 29 Aug 2026</span>
+    </div>
+    <h1>FocusFriction Rebuild</h1>
+    <p class="standfirst">A code review of the old app, and the four-phase rebuild &mdash; now complete &mdash; that turned it into a notes app worth opening daily, one that also pauses the apps you keep reaching for.</p>
+  </header>
+
+  <section>
+    <h2>Two products, one app</h2>
+    <p class="lede">The brief is multipurpose, and that only works if each half stands alone. A notes app nobody would use without the blocker is a to-do list with extra steps; a blocker that needs notes to justify itself is a nag screen.</p>
+
+    <div class="decisions">
+      <div class="decision">
+        <dt>Half one</dt>
+        <dd>A notes app you'd keep with protection off</dd>
+        <p class="why">Full Keep parity &mdash; titles, bodies, checklists, colours, pins, labels, archive, search. It has to survive the test of being useful on a day you never open a monitored app once.</p>
+      </div>
+      <div class="decision">
+        <dt>Half two</dt>
+        <dd>A pause that costs a few seconds of thought</dd>
+        <p class="why">Friction that scales with how often you've already caved today. Always passable, never free &mdash; the point is noticing you didn't mean to open the app.</p>
+      </div>
+    </div>
+
+    <p><strong>What joins them:</strong> the pause screen shows your own note headings. Not a generic &ldquo;are you sure&rdquo;, but the four things you wrote down that you actually meant to do &mdash; and one tap opens that note instead of the feed. The notes make the pause worth obeying; the pause gives the notes a moment where they matter.</p>
+
+    <p><strong>What this changes structurally:</strong> notes become the home surface, not a tab beside the blocker. Protection moves from being the app's identity to being a mode it offers. Today the root component gates you into a setup checklist until protection is on &mdash; that inverts, so the app is immediately useful before you've granted a single permission.</p>
+  </section>
+
+  <hr class="section-rule">
+
+  <section>
+    <h2>The interception was never an overlay</h2>
+    <p class="lede">Most of what reads as sloppiness traces to one architectural decision. Opening a monitored app doesn't draw a pause screen over it &mdash; it cold-boots the entire React Native app and hopes the timing works out.</p>
+
+    <div class="finding">
+      <span class="finding-label">Current path</span>
+      <div class="chain">
+        <span class="node">FocusAccessibilityService</span>
+        <span class="arrow" aria-hidden="true">&rarr;</span>
+        <span class="node">InterventionActivity</span>
+        <span class="arrow" aria-hidden="true">&rarr;</span>
+        <span class="node bad">MainActivity &mdash; full RN cold start</span>
+        <span class="arrow" aria-hidden="true">&rarr;</span>
+        <span class="node">JS polls for a session</span>
+      </div>
+
+      <ol class="consequences">
+        <li><span><strong>It's a race, and it loses.</strong> <code>InterventionActivity</code> starts <code>MainActivity</code> with <code>FLAG_ACTIVITY_NEW_TASK</code>, landing it in a different task. The activity is then destroyed, and its <code>onDestroy</code> clears the active session. By the time JavaScript boots and polls, there's nothing to find &mdash; so the app just opens.</span></li>
+        <li><span><strong>When it wins, it's late.</strong> A React Native cold start runs one to three seconds. You watch the feed load the whole time. The friction arrives after the dopamine it was meant to prevent.</span></li>
+        <li><span><strong>The inverse failure is worse.</strong> Swipe the intervention away mid-session and <code>active_session_*</code> can persist in storage. The accessibility service returns early whenever a session is active, so protection silently stops working entirely until the service reconnects.</span></li>
+      </ol>
+    </div>
+
+    <p>The scaffolding for the right answer is already in the tree and unused: <code>canDrawOverlays</code> and <code>requestOverlayPermission</code> sit in <code>InstalledAppsModule.kt</code>, and older builds showed an &ldquo;Overlay Permission Required&rdquo; banner. But <code>SYSTEM_ALERT_WINDOW</code> is declared only in <code>app.json</code> &mdash; which does nothing, because <code>android/</code> is committed and prebuild never runs. The real manifest has never had the permission.</p>
+
+    <p><strong>The fix:</strong> a foreground service that draws a Jetpack Compose view into a <code>TYPE_APPLICATION_OVERLAY</code> window, directly on top of the paused app. No activity launch, no React Native boot, no task race &mdash; and note headings rendered over the thing you were about to scroll.</p>
+  </section>
+
+  <section>
+    <h2>Defect ledger</h2>
+    <p class="lede">Confirmed by reading the code and the dependency tree, not inferred. Severity reflects what the user loses, not how hard the fix is.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Defect</th><th scope="col">Severity</th><th scope="col">What it costs you</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>settingsStore.updateSchedule()</code> does not exist &mdash; the method is <code>setSchedule</code></td>
+            <td><span class="sev critical">Critical</span></td>
+            <td>Every schedule interaction throws. Focus Schedule has never saved once.</td>
+          </tr>
+          <tr>
+            <td><code>sessionManager.init()</code> is never called during hydration</td>
+            <td><span class="sev critical">Critical</span></td>
+            <td>Events start empty each launch, then the first write persists that empty array. All history is silently wiped, every session.</td>
+          </tr>
+          <tr>
+            <td><code>expo-file-system@57</code> dropped <code>documentDirectory</code> and <code>writeAsStringAsync</code></td>
+            <td><span class="sev critical">Critical</span></td>
+            <td>Export and import both always fail. This is the &ldquo;Export Error&rdquo; in your screenshots.</td>
+          </tr>
+          <tr>
+            <td><code>const dailyOpens = 1;</code> hardcoded in the intervention</td>
+            <td><span class="sev critical">Critical</span></td>
+            <td>Difficulty scaling &mdash; the app's entire premise &mdash; is dead. Always easy, forever.</td>
+          </tr>
+          <tr>
+            <td>Wrong argument shapes on <code>recordSolve</code>, <code>recordGoals</code>, <code>recordBypass</code></td>
+            <td><span class="sev major">Major</span></td>
+            <td>Grant-minutes get stored in the package-ID field. Every number on Home is meaningless, not merely wrong.</td>
+          </tr>
+          <tr>
+            <td>Settings reads <code>scheduleStart</code>; the store only has <code>scheduleStartMinute</code></td>
+            <td><span class="sev major">Major</span></td>
+            <td>Schedule UI always displays 09:00&ndash;17:00 no matter what is stored.</td>
+          </tr>
+          <tr>
+            <td><code>getAppIcon</code> decodes, rescales and base64-encodes per row mount, uncached</td>
+            <td><span class="sev major">Major</span></td>
+            <td>List recycling refires it on every scroll. This is the stutter in the app picker.</td>
+          </tr>
+          <tr>
+            <td>Debounce is global, not per-package, and any window change resets it</td>
+            <td><span class="sev major">Major</span></td>
+            <td>Genuine app opens get swallowed during event storms.</td>
+          </tr>
+          <tr>
+            <td><code>appStore</code> filters on <code>packageName</code> but the list uses <code>packageId</code></td>
+            <td><span class="sev minor">Minor</span></td>
+            <td>JS-side exclusion is a silent no-op. Native is the only thing protecting you from self-interception.</td>
+          </tr>
+          <tr>
+            <td>App root never subscribes to <code>settingsStore</code></td>
+            <td><span class="sev minor">Minor</span></td>
+            <td>Turning protection on doesn't move you to Home until you tap another tab.</td>
+          </tr>
+          <tr>
+            <td><code>typography.displaySmall</code> is referenced but absent from the theme</td>
+            <td><span class="sev minor">Minor</span></td>
+            <td>Stat numbers silently fall back to 14px instead of display size.</td>
+          </tr>
+          <tr>
+            <td>Dead code: <code>InterceptOverlay.js</code> (470 lines, never imported), duplicate <code>SetupScreen</code></td>
+            <td><span class="sev minor">Minor</span></td>
+            <td>Calls three store methods that no longer exist. Pure drag on every read of the codebase.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Four phases, in dependency order</h2>
+    <p class="lede">Numbered because the order is load-bearing: each phase is verifiable on-device before the next one lands, so there is never a long stretch where nothing runs.</p>
+
+    <div class="phases">
+
+      <article class="phase active">
+        <div class="phase-num">01</div>
+        <div class="phase-head">
+          <h3>Make the current app honest</h3>
+          <span class="status done">Done</span>
+        </div>
+        <p class="phase-body">Every defect above, with no architectural change. Fix the schedule store mismatch, rewrite export/import on the new <code>File</code>/<code>Paths</code> API, hydrate the session manager, correct the three record signatures, wire real daily-open counts so difficulty scales again, cache app icons in a native <code>LruCache</code>, make the debounce per-package, delete the dead files, and replace the deprecated <code>SafeAreaView</code> that warns on every launch.</p>
+        <p class="phase-dep">No dependencies &middot; fully testable alone</p>
+      </article>
+
+      <article class="phase">
+        <div class="phase-num">02</div>
+        <div class="phase-head">
+          <h3>The native overlay</h3>
+          <span class="status done">Done</span>
+        </div>
+        <p class="phase-body"><strong>Shipped differently, and better.</strong> Instead of a foreground service holding a <code>TYPE_APPLICATION_OVERLAY</code>, the accessibility service adds a <code>TYPE_ACCESSIBILITY_OVERLAY</code> window directly: no <code>SYSTEM_ALERT_WINDOW</code> permission, immune to <code>setHideOverlayWindows()</code>, and no second service to keep alive. Plain Android views rather than Compose, which kept several MB out of the APK. Challenge generation, difficulty and outcome logging all moved to Kotlin, because no JavaScript is alive at interception time. <code>InterventionActivity</code>, <code>InterventionModule</code> and <code>InterventionScreen.js</code> deleted.</p>
+        <p class="phase-dep">Needs 01 &middot; deletes code 01 repaired</p>
+      </article>
+
+      <article class="phase">
+        <div class="phase-num">03</div>
+        <div class="phase-head">
+          <h3>Notes at the centre</h3>
+          <span class="status done">Done</span>
+        </div>
+        <p class="phase-body">Replace flat tasks with a real note model &mdash; title, body, checklist items, colour, pinned, archived, labels, timestamps &mdash; on <code>expo-sqlite</code> with a full-text index. Keep-style masonry grid, editor, undo-on-delete, search. Notes take over as the home surface and the setup checklist stops gating it, so the app is useful before any permission is granted. A compact heading projection is mirrored into shared storage on every write so the overlay can read it synchronously.</p>
+        <p class="phase-dep">Needs 02 &middot; overlay is the consumer</p>
+      </article>
+
+      <article class="phase">
+        <div class="phase-num">04</div>
+        <div class="phase-head">
+          <h3>Material 3 Expressive</h3>
+          <span class="status done">Done</span>
+        </div>
+        <p class="phase-body">Light, dark and system themes with wallpaper-derived dynamic colour. A real vector icon set replacing every emoji used as chrome &mdash; the single biggest thing making the app read as unfinished. Elevation and state layers, spring motion, tinted note cards, and a deliberately distinct visual language for the overlay so it never feels like the app followed you.</p>
+        <p class="phase-dep">Needs 03 &middot; styles the finished surfaces</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Decisions locked</h2>
+    <p class="lede">Each was chosen over stated alternatives. Recorded so they don't get relitigated in a later session.</p>
+
+    <dl class="decisions">
+      <div class="decision">
+        <dt>Notes storage</dt>
+        <dd>SQLite in JS, headings mirrored to native</dd>
+        <p class="why">Over a fully native Room database. The overlay needs a synchronous read at window-change time; mirroring a small projection matches the pattern the policy store already uses.</p>
+      </div>
+      <div class="decision">
+        <dt>Interception</dt>
+        <dd>Foreground service, Compose overlay window</dd>
+        <p class="why">Over patching the activity relaunch. The race condition and the lockout bug are properties of that design, not bugs within it.</p>
+      </div>
+      <div class="decision">
+        <dt>Visual scope</dt>
+        <dd>Full Material 3 Expressive, dynamic colour</dd>
+        <p class="why">Over keeping the dark-only palette. Touches every screen, but the emoji-as-icon problem can't be fixed halfway.</p>
+      </div>
+      <div class="decision">
+        <dt>Sequencing</dt>
+        <dd>Repair first, then re-architect</dd>
+        <p class="why">Over leading with the overlay. Slower to the interesting part, far lower risk of a long stretch where nothing works end to end.</p>
+      </div>
+    </dl>
+  </section>
+
+  <section>
+    <h2>Where the Kotlin actually goes</h2>
+    <div class="aside">
+      <h3>&ldquo;Natively a notes app&rdquo; meant identity, not language</h3>
+      <p>The phrase reads two ways. It could mean <em>notes are the heart of the app</em> &mdash; flipping it from a blocker with a to-do list stapled on, into a notes app that happens to block. Or it could mean <em>written in Kotlin</em>, Android's own language, rather than the JavaScript layer the app uses today. Confirmed as the first.</p>
+      <p>The second would have meant discarding all 3,800 lines of working JavaScript and rebuilding every screen from scratch &mdash; months of work for a payoff you'd mostly notice as slightly smoother scrolling.</p>
+      <p>Worth knowing either way: <strong>the overlay is Kotlin regardless.</strong> A window that draws on top of another app has to live outside your app and appear in a fraction of a second, which React Native cannot do. The native benefit lands exactly where it matters, without paying for it everywhere else.</p>
+    </div>
+  </section>
+
+  <footer>
+    <span>FocusFriction</span>
+    <span>All four phases complete</span>
+    <span>3,805 lines JS &middot; 957 lines Kotlin reviewed</span>
+  </footer>
+
+</div>
+
+</body>
+</html>

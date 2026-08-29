@@ -54,3 +54,7 @@ yarn-error.*
 .node/
 .idea/
 *.iml
+
+# build output
+*.apk
+*.aab
