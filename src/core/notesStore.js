@@ -38,6 +38,8 @@ class NotesStore {
     this.notes = [];          // in-memory mirror for synchronous reads
     this.listeners = new Set();
     this.hydrated = false;
+    this.schemaReady = false;
+    this.initError = null;
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────
@@ -45,32 +47,74 @@ class NotesStore {
   async init() {
     try {
       this.db = await SQLite.openDatabaseAsync(DB_NAME);
-
-      await this.db.execAsync(`
-        PRAGMA journal_mode = WAL;
-        CREATE TABLE IF NOT EXISTS notes (
-          id          TEXT PRIMARY KEY NOT NULL,
-          title       TEXT NOT NULL DEFAULT '',
-          body        TEXT NOT NULL DEFAULT '',
-          items       TEXT NOT NULL DEFAULT '[]',
-          color       TEXT NOT NULL DEFAULT 'default',
-          labels      TEXT NOT NULL DEFAULT '',
-          pinned      INTEGER NOT NULL DEFAULT 0,
-          archived    INTEGER NOT NULL DEFAULT 0,
-          created_at  INTEGER NOT NULL,
-          updated_at  INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(archived, pinned, updated_at DESC);
-      `);
-
+      await this._ensureSchema();
       await this._migrateLegacyTasks();
       await this._reload();
+      this.initError = null;
     } catch (error) {
-      console.warn('[NotesStore] Init failed:', error);
+      console.error('[NotesStore] Init failed:', error);
+      this.initError = error;
       this.notes = [];
     }
     this.hydrated = true;
     this._notify();
+  }
+
+  /**
+   * Create the schema. Kept separate from opening the database and from the
+   * PRAGMA, because a failure in any one of them previously left `db` assigned
+   * with no table behind it — every later write then failed with "no such
+   * table: notes", which surfaced to the user as an unexplained save error.
+   */
+  async _ensureSchema() {
+    if (!this.db) throw new Error('Database is not open');
+
+    // Best-effort: WAL is a performance choice, not a correctness one, and this
+    // statement returns a row, which some drivers refuse inside a batch.
+    try {
+      await this.db.execAsync('PRAGMA journal_mode = WAL;');
+    } catch (e) {
+      console.warn('[NotesStore] WAL unavailable, continuing on the default journal:', e);
+    }
+
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id          TEXT PRIMARY KEY NOT NULL,
+        title       TEXT NOT NULL DEFAULT '',
+        body        TEXT NOT NULL DEFAULT '',
+        items       TEXT NOT NULL DEFAULT '[]',
+        color       TEXT NOT NULL DEFAULT 'default',
+        labels      TEXT NOT NULL DEFAULT '',
+        pinned      INTEGER NOT NULL DEFAULT 0,
+        archived    INTEGER NOT NULL DEFAULT 0,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL
+      );
+    `);
+
+    // Manual ordering, added after the first release. ALTER TABLE ADD COLUMN
+    // throws if it already exists, and there is no IF NOT EXISTS for it.
+    const columns = await this.db.getAllAsync(`PRAGMA table_info(notes)`);
+    if (!columns.some(c => c.name === 'sort_order')) {
+      await this.db.execAsync(`ALTER TABLE notes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`);
+    }
+
+    await this.db.execAsync(
+      `CREATE INDEX IF NOT EXISTS idx_notes_order ON notes(archived, pinned, sort_order DESC, updated_at DESC);`
+    );
+
+    this.schemaReady = true;
+  }
+
+  /**
+   * Guard every write. If init failed (bad upgrade, storage hiccup) this gives
+   * the app a chance to recover instead of failing for the rest of the session.
+   */
+  async _requireDb() {
+    if (this.db && this.schemaReady) return;
+    this.db = this.db || await SQLite.openDatabaseAsync(DB_NAME);
+    await this._ensureSchema();
+    if (this.notes.length === 0) await this._reload();
   }
 
   /**
@@ -112,7 +156,7 @@ class NotesStore {
 
   async _reload() {
     const rows = await this.db.getAllAsync(
-      `SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC`
+      `SELECT * FROM notes ORDER BY pinned DESC, sort_order DESC, updated_at DESC`
     );
     this.notes = rows.map(this._hydrateRow);
     await this._mirrorToNative();
@@ -131,6 +175,7 @@ class NotesStore {
     archived: !!row.archived,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    sortOrder: row.sort_order || 0,
   });
 
   // ─── Reads (synchronous, from the in-memory mirror) ─────────────────────
@@ -177,6 +222,7 @@ class NotesStore {
   // ─── Mutations ──────────────────────────────────────────────────────────
 
   async createNote(fields = {}) {
+    await this._requireDb();
     const stamp = now();
     const note = {
       id: uuidv4(),
@@ -191,11 +237,13 @@ class NotesStore {
       updatedAt: stamp,
     };
 
+    note.sortOrder = this._nextSortOrder();
+
     await this.db.runAsync(
-      `INSERT INTO notes (id, title, body, items, color, labels, pinned, archived, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      `INSERT INTO notes (id, title, body, items, color, labels, pinned, archived, created_at, updated_at, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
       [note.id, note.title, note.body, JSON.stringify(note.items),
-       note.color, note.labels.join(','), note.pinned ? 1 : 0, stamp, stamp]
+       note.color, note.labels.join(','), note.pinned ? 1 : 0, stamp, stamp, note.sortOrder]
     );
 
     this.notes = [note, ...this.notes];
@@ -204,6 +252,7 @@ class NotesStore {
   }
 
   async updateNote(id, patch) {
+    await this._requireDb();
     const existing = this.getNote(id);
     if (!existing) return null;
 
@@ -211,10 +260,10 @@ class NotesStore {
 
     await this.db.runAsync(
       `UPDATE notes SET title = ?, body = ?, items = ?, color = ?, labels = ?,
-         pinned = ?, archived = ?, updated_at = ? WHERE id = ?`,
+         pinned = ?, archived = ?, updated_at = ?, sort_order = ? WHERE id = ?`,
       [next.title, next.body, JSON.stringify(next.items), next.color,
        next.labels.join(','), next.pinned ? 1 : 0, next.archived ? 1 : 0,
-       next.updatedAt, id]
+       next.updatedAt, next.sortOrder || 0, id]
     );
 
     this.notes = this._resort(this.notes.map(n => (n.id === id ? next : n)));
@@ -223,6 +272,7 @@ class NotesStore {
   }
 
   async deleteNote(id) {
+    await this._requireDb();
     const note = this.getNote(id);
     if (!note) return null;
     await this.db.runAsync(`DELETE FROM notes WHERE id = ?`, [id]);
@@ -234,12 +284,13 @@ class NotesStore {
   /** Re-insert a deleted note verbatim, preserving its id and timestamps. */
   async restoreNote(note) {
     if (!note || !note.id) return;
+    await this._requireDb();
     await this.db.runAsync(
-      `INSERT OR REPLACE INTO notes (id, title, body, items, color, labels, pinned, archived, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO notes (id, title, body, items, color, labels, pinned, archived, created_at, updated_at, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [note.id, note.title, note.body, JSON.stringify(note.items), note.color,
        note.labels.join(','), note.pinned ? 1 : 0, note.archived ? 1 : 0,
-       note.createdAt, note.updatedAt]
+       note.createdAt, note.updatedAt, note.sortOrder || 0]
     );
     this.notes = this._resort([note, ...this.notes]);
     await this._afterWrite();
@@ -259,6 +310,34 @@ class NotesStore {
     return this.updateNote(id, { color });
   }
 
+  /** Manual reordering: lift a note above everything else in its group. */
+  moveToTop(id) {
+    return this.updateNote(id, { sortOrder: this._nextSortOrder() });
+  }
+
+  /** Swap a note with its neighbour in the current display order. */
+  async moveBy(id, delta) {
+    const list = this.getNotes({ archived: this.getNote(id)?.archived || false });
+    const index = list.findIndex(n => n.id === id);
+    const target = index + delta;
+    if (index === -1 || target < 0 || target >= list.length) return null;
+
+    const a = list[index];
+    const b = list[target];
+    // Pinned and unpinned are separate groups; refuse to swap across them.
+    if (a.pinned !== b.pinned) return null;
+
+    const aOrder = a.sortOrder || 0;
+    const bOrder = b.sortOrder || 0;
+    if (aOrder === bOrder) {
+      // Never ordered manually before — assign distinct values first.
+      await this.updateNote(b.id, { sortOrder: this._nextSortOrder() });
+      return this.updateNote(a.id, { sortOrder: this._nextSortOrder() + 1 });
+    }
+    await this.updateNote(b.id, { sortOrder: aOrder });
+    return this.updateNote(a.id, { sortOrder: bOrder });
+  }
+
   async toggleItem(noteId, itemId) {
     const note = this.getNote(noteId);
     if (!note) return null;
@@ -273,8 +352,14 @@ class NotesStore {
   _resort(list) {
     return [...list].sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      const orderDiff = (b.sortOrder || 0) - (a.sortOrder || 0);
+      if (orderDiff !== 0) return orderDiff;
       return b.updatedAt - a.updatedAt;
     });
+  }
+
+  _nextSortOrder() {
+    return this.notes.reduce((max, n) => Math.max(max, n.sortOrder || 0), 0) + 1;
   }
 
   async _afterWrite() {

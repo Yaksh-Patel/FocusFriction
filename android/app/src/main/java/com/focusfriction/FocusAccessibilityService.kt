@@ -28,30 +28,6 @@ class FocusAccessibilityService : AccessibilityService() {
 
     private var overlay: FocusOverlayController? = null
 
-    /**
-     * Windows that routinely appear *over* a paused app without the user having
-     * left it: permission prompts, system dialogs, the keyboard, the shade.
-     * Treating these as "user navigated away" is what let a location-permission
-     * dialog dismiss the pause and hand over the app.
-     */
-    private fun isTransientSystemWindow(packageId: String): Boolean {
-        if (packageId == "android") return true
-        if (packageId == "com.android.systemui") return true
-        if (packageId.endsWith(".permissioncontroller")) return true
-        if (packageId.endsWith(".packageinstaller")) return true
-        if (packageId.contains("inputmethod")) return true
-        if (packageId == currentImePackage()) return true
-        return false
-    }
-
-    private fun currentImePackage(): String? = try {
-        android.provider.Settings.Secure.getString(
-            contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
-        )?.substringBefore('/')
-    } catch (e: Exception) {
-        null
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         isConnected = true
@@ -71,18 +47,12 @@ class FocusAccessibilityService : AccessibilityService() {
         // Our own windows must never drive the state machine.
         if (packageId == packageName) return
 
-        if (controller.isShowing) {
-            // Stay up for the paused app itself and for anything transient layered
-            // over it. Only a move to a genuinely different app counts as leaving.
-            if (packageId == controller.pausedPackage) return
-            if (isTransientSystemWindow(packageId)) return
-
-            controller.hide()
-            // Allow an immediate re-pause if they come straight back: without this
-            // the per-package debounce would swallow the returning event.
-            controller.lastPausedPackage?.let { lastEventByPackage.remove(it) }
-            return
-        }
+        // While the pause is up, ignore the world. The app it concerns has been
+        // sent to the background, so every window event now describes the
+        // launcher or a system surface — none of which mean the user decided
+        // anything. The overlay comes down only through an explicit choice, BACK,
+        // or its own safety timeout.
+        if (controller.isShowing) return
 
         val now = System.currentTimeMillis()
         val last = lastEventByPackage[packageId] ?: 0L

@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  View, Text, TextInput, Pressable, ScrollView, useWindowDimensions,
+  View, Text, TextInput, Pressable, ScrollView, useWindowDimensions, Alert,
 } from 'react-native';
 import { useTheme } from '../theme';
 import Icon from '../components/Icon';
@@ -59,7 +59,7 @@ function packColumns(notes, columnCount, columnWidth) {
 
 // ─── Note card ────────────────────────────────────────────────────────────
 
-const NoteCard = ({ note, tint, theme, onPress, onToggleItem }) => {
+const NoteCard = ({ note, tint, theme, onPress, onLongPress, onToggleItem }) => {
   const { colors, typography, spacing, shapes } = theme;
   const visibleItems = note.items.slice(0, 8);
   const hiddenCount = note.items.length - visibleItems.length;
@@ -67,6 +67,8 @@ const NoteCard = ({ note, tint, theme, onPress, onToggleItem }) => {
   return (
     <Pressable
       onPress={() => onPress(note)}
+      onLongPress={() => onLongPress(note)}
+      delayLongPress={300}
       android_ripple={{ color: colors.onSurface + '14' }}
       style={({ pressed }) => [{
         backgroundColor: tint.bg,
@@ -79,6 +81,7 @@ const NoteCard = ({ note, tint, theme, onPress, onToggleItem }) => {
       }]}
       accessibilityRole="button"
       accessibilityLabel={note.title || 'Untitled note'}
+      accessibilityHint="Long press for pin, colour, archive and delete"
     >
       {note.pinned && (
         <View style={{ position: 'absolute', top: 8, right: 8 }}>
@@ -217,6 +220,36 @@ export default function NotesScreen({ initialNoteId, onConsumeInitialNote }) {
     }
   }, []);
 
+  const handleLongPress = useCallback((note) => {
+    const options = [
+      {
+        text: note.pinned ? 'Unpin' : 'Pin to top',
+        onPress: () => notesStore.togglePin(note.id),
+      },
+      {
+        text: 'Move to top',
+        onPress: () => notesStore.moveToTop(note.id),
+      },
+      {
+        text: note.archived ? 'Unarchive' : 'Archive',
+        onPress: () => notesStore.toggleArchive(note.id),
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const removed = await notesStore.deleteNote(note.id);
+          if (removed) {
+            setUndoNote(removed);
+            setTimeout(() => setUndoNote(cur => (cur?.id === removed.id ? null : cur)), 6000);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ];
+    Alert.alert(note.title || 'Untitled note', null, options, { cancelable: true });
+  }, []);
+
   const renderGrid = (list) => {
     const columns = packColumns(list, columnCount, columnWidth);
     return (
@@ -230,6 +263,7 @@ export default function NotesScreen({ initialNoteId, onConsumeInitialNote }) {
                 tint={tints[note.color] || tints.default}
                 theme={theme}
                 onPress={setEditing}
+                onLongPress={handleLongPress}
                 onToggleItem={handleToggleItem}
               />
             ))}

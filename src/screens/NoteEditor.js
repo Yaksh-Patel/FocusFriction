@@ -87,7 +87,9 @@ export default function NoteEditor({ note, onClose, onDelete }) {
       await notesStore.updateNote(noteIdRef.current, fields);
     } catch (error) {
       console.error('[NoteEditor] Save failed:', error);
-      Alert.alert('Could not save', 'Something went wrong writing this note.');
+      // Show the real reason. "Something went wrong" told the user nothing and
+      // told me nothing either when this came back from the device.
+      Alert.alert('Could not save this note', String(error?.message || error));
     }
   }, []);
 

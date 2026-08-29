@@ -149,22 +149,31 @@
                 android:orientation="vertical"
                 android:visibility="gone" />
 
-            <EditText
-                android:id="@+id/ff_input"
+            <!-- Assembled answer for the typing challenge. There is deliberately no
+                 EditText anywhere in this overlay: getting the IME to focus a
+                 non-activity window is unreliable across OEMs, and when it half
+                 worked there was no cursor, no way to dismiss the keyboard, and
+                 the card sat behind it. -->
+            <TextView
+                android:id="@+id/ff_typed"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/ff_input_bg"
                 android:gravity="center"
-                android:hint="Your answer"
-                android:importantForAutofill="no"
-                android:inputType="number"
-                android:minHeight="56dp"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
+                android:minHeight="58dp"
+                android:padding="12dp"
                 android:textColor="@color/ff_text"
-                android:textColorHint="@color/ff_text_dim"
-                android:textSize="20sp" />
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/ff_wordbank"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/ff_error"
