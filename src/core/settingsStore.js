@@ -53,6 +53,9 @@ class SettingsStore {
     }
     this.hydrated = true;
     this._notify();
+    // NOTE: native sync deliberately does NOT happen here — syncNative() reads the
+    // monitored list from appStore, which may not have hydrated yet. App.js calls it
+    // once every store is up. Syncing early could push an empty set and wipe policy.
   }
 
   // ─── Reads ─────────────────────────────────────────────────────────────────
@@ -124,7 +127,7 @@ class SettingsStore {
   async setProtectionEnabled(enabled) {
     this.settings.isProtectionEnabled = !!enabled;
     await this._persist();
-    await this._syncNative();
+    await this.syncNative();
     this._notify();
   }
 
@@ -140,6 +143,7 @@ class SettingsStore {
     }
     this.settings.enabledFrictionTypes = current;
     await this._persist();
+    await this.syncNative();
     this._notify();
   }
 
@@ -156,7 +160,7 @@ class SettingsStore {
     this.settings.scheduleStartMinute = startMinute;
     this.settings.scheduleEndMinute = endMinute;
     await this._persist();
-    await this._syncNative();
+    await this.syncNative();
     this._notify();
     return { success: true, error: null };
   }
@@ -165,7 +169,7 @@ class SettingsStore {
     this.settings.solveGrantMinutes = Math.max(1, solveMinutes);
     this.settings.bypassGrantMinutes = Math.max(1, bypassMinutes);
     await this._persist();
-    await this._syncNative();
+    await this.syncNative();
     this._notify();
   }
 
@@ -188,10 +192,10 @@ class SettingsStore {
   }
 
   /**
-   * Sync current policy to native FocusPolicyRepository.
-   * Also requires current monitored packages from appStore.
+   * Sync current policy to the native FocusPolicyRepository.
+   * Public — the app selector calls this after toggling a monitored app.
    */
-  async _syncNative() {
+  async syncNative() {
     if (Platform.OS !== 'android') return;
     try {
       const { InstalledAppsModule } = NativeModules;
@@ -209,6 +213,9 @@ class SettingsStore {
         scheduleEndMinute: this.settings.scheduleEndMinute,
         solveGrantMinutes: this.settings.solveGrantMinutes,
         bypassGrantMinutes: this.settings.bypassGrantMinutes,
+        // The overlay picks the friction mode natively now — JS is not running
+        // when a monitored app opens, so the enabled set has to live over there.
+        frictionTypes: this.settings.enabledFrictionTypes,
       });
     } catch (error) {
       console.warn('[SettingsStore] Native sync failed:', error);

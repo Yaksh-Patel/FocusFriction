@@ -10,7 +10,7 @@ class FocusFrictionPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
         val modules = ArrayList<NativeModule>()
         modules.add(InstalledAppsModule(reactContext))
-        modules.add(InterventionModule(reactContext))
+        modules.add(FocusBridgeModule(reactContext))
         return modules
     }
 

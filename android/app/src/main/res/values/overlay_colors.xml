@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The pause overlay has its own restrained palette, deliberately distinct
+         from the app so it never reads as "the app followed me here". -->
+    <color name="ff_scrim">#E60B0C10</color>
+    <color name="ff_card">#16181D</color>
+    <color name="ff_card_raised">#212429</color>
+    <color name="ff_input">#1B1E23</color>
+    <color name="ff_stroke">#31353D</color>
+    <color name="ff_text">#ECEDF1</color>
+    <color name="ff_text_dim">#9BA0AC</color>
+    <color name="ff_accent">#E5A551</color>
+    <color name="ff_accent_ink">#231708</color>
+    <color name="ff_danger">#E08386</color>
+    <color name="ff_note_dot">#7FC4A0</color>
+</resources>

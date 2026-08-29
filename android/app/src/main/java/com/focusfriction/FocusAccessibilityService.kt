@@ -1,82 +1,126 @@
 package com.focusfriction
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
-import java.util.UUID
 
 /**
- * FocusAccessibilityService — Foreground app detector with proper state machine.
+ * FocusAccessibilityService — foreground-app detector and overlay host.
  *
- * States:
- *   IDLE → INTERVENTION_ACTIVE(sessionId, packageId) → IDLE
- *   IDLE → ALLOWED_UNTIL_EXPIRY (no action)
- *   IDLE → OUTSIDE_SCHEDULE (no action)
+ * The previous design launched an Activity, which launched the whole React Native
+ * app, and hoped JS booted before the activity was destroyed. It lost that race
+ * routinely. This version answers the decision synchronously and adds a window
+ * directly — no activity, no bridge, no cold start.
  */
 class FocusAccessibilityService : AccessibilityService() {
 
-    private var lastEventTimestamp: Long = 0L
-    private val DEBOUNCE_MS = 1000L
+    companion object {
+        /** Set while the service is connected, so the JS bridge can ask if it's live. */
+        @Volatile
+        var isConnected: Boolean = false
+            private set
+    }
+
+    // Debounced per package. A single shared timestamp meant any window change —
+    // including our own overlay — suppressed a genuine app open moments later.
+    private val lastEventByPackage = HashMap<String, Long>()
+    private val debounceMs = 700L
+    private val maxTrackedPackages = 64
+
+    private var overlay: FocusOverlayController? = null
+
+    /**
+     * Windows that routinely appear *over* a paused app without the user having
+     * left it: permission prompts, system dialogs, the keyboard, the shade.
+     * Treating these as "user navigated away" is what let a location-permission
+     * dialog dismiss the pause and hand over the app.
+     */
+    private fun isTransientSystemWindow(packageId: String): Boolean {
+        if (packageId == "android") return true
+        if (packageId == "com.android.systemui") return true
+        if (packageId.endsWith(".permissioncontroller")) return true
+        if (packageId.endsWith(".packageinstaller")) return true
+        if (packageId.contains("inputmethod")) return true
+        if (packageId == currentImePackage()) return true
+        return false
+    }
+
+    private fun currentImePackage(): String? = try {
+        android.provider.Settings.Secure.getString(
+            contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
+        )?.substringBefore('/')
+    } catch (e: Exception) {
+        null
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        isConnected = true
+        overlay = FocusOverlayController(this)
+        lastEventByPackage.clear()
+        FocusPolicyRepository.getInstance(applicationContext).pruneExpiredUnlocks()
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
-        val packageId = event.packageName?.toString()?.trim() ?: return
+        val packageId = event.packageName?.toString()?.trim().orEmpty()
         if (packageId.isBlank()) return
 
-        // Debounce rapid duplicate events
-        val now = System.currentTimeMillis()
-        if (now - lastEventTimestamp < DEBOUNCE_MS) return
-        lastEventTimestamp = now
+        val controller = overlay ?: return
 
-        val policy = FocusPolicyRepository.getInstance(applicationContext)
-        policy.pruneExpiredUnlocks()
+        // Our own windows must never drive the state machine.
+        if (packageId == packageName) return
 
-        // If an intervention is already active, ignore
-        val currentSessionPkg = policy.getActiveSessionPackage()
-        val currentSessionId = policy.getActiveSessionId()
-        if (currentSessionPkg != null && currentSessionId != null) {
+        if (controller.isShowing) {
+            // Stay up for the paused app itself and for anything transient layered
+            // over it. Only a move to a genuinely different app counts as leaving.
+            if (packageId == controller.pausedPackage) return
+            if (isTransientSystemWindow(packageId)) return
+
+            controller.hide()
+            // Allow an immediate re-pause if they come straight back: without this
+            // the per-package debounce would swallow the returning event.
+            controller.lastPausedPackage?.let { lastEventByPackage.remove(it) }
             return
         }
 
-        // Core decision
+        val now = System.currentTimeMillis()
+        val last = lastEventByPackage[packageId] ?: 0L
+        if (now - last < debounceMs) return
+        if (lastEventByPackage.size > maxTrackedPackages) {
+            lastEventByPackage.entries.removeAll { now - it.value > debounceMs * 20 }
+        }
+        lastEventByPackage[packageId] = now
+
+        val policy = FocusPolicyRepository.getInstance(applicationContext)
+        policy.pruneExpiredUnlocks()
         if (!policy.shouldIntercept(packageId)) return
 
-        // Create a new intervention session
-        val sessionId = UUID.randomUUID().toString()
-        policy.setActiveSession(packageId, sessionId)
-
-        // Get app label for display
-        val appLabel = try {
+        val label = try {
             val pm = applicationContext.packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(packageId, 0)).toString()
         } catch (e: Exception) {
             packageId
         }
 
-        // Launch InterventionActivity via explicit internal intent
-        val intent = Intent(applicationContext, InterventionActivity::class.java).apply {
-            putExtra(InterventionActivity.EXTRA_PACKAGE_ID, packageId)
-            putExtra(InterventionActivity.EXTRA_APP_LABEL, appLabel)
-            putExtra(InterventionActivity.EXTRA_SESSION_ID, sessionId)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        }
-        applicationContext.startActivity(intent)
+        controller.show(packageId, label)
     }
 
     override fun onInterrupt() {
+        overlay?.hide()
     }
 
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        // Reset any stale session
-        FocusPolicyRepository.getInstance(applicationContext).clearActiveSession()
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        isConnected = false
+        overlay?.hide()
+        overlay = null
+        return super.onUnbind(intent)
     }
 
-    /**
-     * Called by InterventionActivity when intervention is complete.
-     */
-    fun onInterventionComplete() {
-        FocusPolicyRepository.getInstance(applicationContext).clearActiveSession()
+    override fun onDestroy() {
+        isConnected = false
+        overlay?.hide()
+        overlay = null
+        super.onDestroy()
     }
 }

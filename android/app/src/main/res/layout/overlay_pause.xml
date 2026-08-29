@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The pause overlay. Added by FocusAccessibilityService as a
+  TYPE_ACCESSIBILITY_OVERLAY window, so it sits above the app being paused and
+  cannot be suppressed by setHideOverlayWindows().
+-->
+<com.focusfriction.OverlayRootView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/ff_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ff_scrim"
+    android:focusable="true"
+    android:focusableInTouchMode="true">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:fillViewport="false"
+        android:clipToPadding="false"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="32dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/ff_card_bg"
+            android:padding="24dp">
+
+            <!-- Eyebrow -->
+            <TextView
+                android:id="@+id/ff_eyebrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/ff_pill"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="PAUSED"
+                android:textColor="@color/ff_accent"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.14"
+                android:fontFamily="sans-serif-medium" />
+
+            <TextView
+                android:id="@+id/ff_app_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textColor="@color/ff_text"
+                android:textSize="27sp"
+                android:textStyle="bold"
+                android:lineSpacingExtra="2dp"
+                android:fontFamily="sans-serif"
+                android:text="YouTube" />
+
+            <TextView
+                android:id="@+id/ff_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/ff_text_dim"
+                android:textSize="14sp"
+                android:text="You can still go in. It just costs a moment." />
+
+            <!-- Note headings mirrored from the app -->
+            <TextView
+                android:id="@+id/ff_notes_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:text="YOU WROTE DOWN"
+                android:textColor="@color/ff_text_dim"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.12" />
+
+            <LinearLayout
+                android:id="@+id/ff_notes_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical" />
+
+            <!-- Challenge -->
+            <TextView
+                android:id="@+id/ff_challenge_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:textColor="@color/ff_text_dim"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.12"
+                android:text="SOLVE TO CONTINUE" />
+
+            <TextView
+                android:id="@+id/ff_challenge_prompt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:textColor="@color/ff_accent"
+                android:textSize="30sp"
+                android:textStyle="bold"
+                android:text="47 + 28" />
+
+            <!-- Breathing visual, shown only in breathing mode -->
+            <FrameLayout
+                android:id="@+id/ff_breath_box"
+                android:layout_width="match_parent"
+                android:layout_height="140dp"
+                android:visibility="gone">
+
+                <View
+                    android:id="@+id/ff_breath_circle"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ff_breath_circle" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/ff_answer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/ff_input_bg"
+                android:gravity="center"
+                android:minHeight="58dp"
+                android:textColor="@color/ff_text"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/ff_keypad"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/ff_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/ff_input_bg"
+                android:gravity="center"
+                android:hint="Your answer"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:minHeight="56dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:textColor="@color/ff_text"
+                android:textColorHint="@color/ff_text_dim"
+                android:textSize="20sp" />
+
+            <TextView
+                android:id="@+id/ff_error"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:textColor="@color/ff_danger"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <!-- Actions -->
+            <TextView
+                android:id="@+id/ff_btn_primary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/ff_btn_primary"
+                android:gravity="center"
+                android:minHeight="54dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:text="Continue"
+                android:textColor="@color/ff_accent_ink"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:focusable="true"
+                android:clickable="true" />
+
+            <TextView
+                android:id="@+id/ff_btn_notes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/ff_btn_ghost"
+                android:gravity="center"
+                android:minHeight="50dp"
+                android:text="Open my notes instead"
+                android:textColor="@color/ff_text"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:focusable="true"
+                android:clickable="true" />
+
+            <TextView
+                android:id="@+id/ff_btn_skip"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:gravity="center"
+                android:minHeight="40dp"
+                android:text="Skip this time"
+                android:textColor="@color/ff_text_dim"
+                android:textSize="13sp"
+                android:focusable="true"
+                android:clickable="true" />
+
+        </LinearLayout>
+    </ScrollView>
+</com.focusfriction.OverlayRootView>

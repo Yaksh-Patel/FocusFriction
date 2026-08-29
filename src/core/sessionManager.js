@@ -11,12 +11,23 @@
  */
 
 import appStorage from './appStorage';
+import nativeBridge from './nativeBridge';
 
 const EVENTS_KEY = '@focusfriction/intervention_events_v1';
 
 function getTodayKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Timestamp of local midnight today.
+ * NOTE: do NOT use `new Date('2026-08-29').getTime()` — a bare date string is parsed
+ * as UTC midnight, so "today" would start at the wrong hour anywhere but UTC.
+ */
+function getTodayStart() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
 
 class SessionManager {
@@ -72,77 +83,98 @@ class SessionManager {
     return fullEvent;
   }
 
-  // ─── Legacy compat helpers (called from InterventionScreen) ────────────────
+  /**
+   * Pull in events the pause overlay recorded while JS was not running, and merge
+   * them into the persistent log. Called on boot and on every foreground.
+   *
+   * Deduplicated by (timestamp, packageId, outcome): drain clears the native
+   * buffer, but a crash between drain and persist could otherwise double-count.
+   */
+  async syncFromNative() {
+    const pending = await nativeBridge.drainPendingEvents();
+    if (!pending || pending.length === 0) return 0;
 
-  async recordInterception(packageId) {
-    // Interception recording now happens via appendEvent on completion
-    // This is a no-op kept for backward compat
+    const seen = new Set(
+      this.events.map(e => `${e.timestamp}|${e.packageId}|${e.outcome}`)
+    );
+
+    const merged = [];
+    for (const e of pending) {
+      const key = `${e.timestamp}|${e.packageId}|${e.outcome}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({
+        id: `${e.timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+        sessionId: '',
+        timestamp: e.timestamp,
+        packageId: e.packageId || '',
+        packageLabel: e.packageLabel || e.packageId || 'Unknown app',
+        mode: e.mode || 'none',
+        outcome: e.outcome || 'dismissed',
+        accessMinutesGranted: e.accessMinutesGranted || 0,
+      });
+    }
+
+    if (merged.length === 0) return 0;
+
+    this.events = [...this.events, ...merged].sort((a, b) => a.timestamp - b.timestamp);
+    await this._persist();
+    this._notify();
+    return merged.length;
   }
 
-  async recordBypass(packageId, mode) {
-    await this.appendEvent({
-      packageId,
-      mode: mode || 'bypass',
-      outcome: 'bypassed',
-      accessMinutesGranted: 3,
-    });
-  }
-
-  async recordSolve(packageId, mode, grantMinutes) {
-    await this.appendEvent({
-      packageId,
-      mode: mode || 'math',
-      outcome: 'solved',
-      accessMinutesGranted: grantMinutes || 10,
-    });
-  }
-
-  async recordGoals(packageId) {
-    await this.appendEvent({
-      packageId,
-      mode: 'goals',
-      outcome: 'goals',
-      accessMinutesGranted: 0,
-    });
-  }
+  // NOTE: there are no JS-side recorders any more. Every intervention outcome is
+  // written natively by the pause overlay, because no JavaScript is running at
+  // that moment. syncFromNative() above is the only way events enter this log.
 
   // ─── Analytics ─────────────────────────────────────────────────────────────
 
   /**
+   * How many times a specific app has been intercepted today.
+   * This is what drives puzzle difficulty — the whole "cost scales with your own
+   * behaviour" premise depends on it being real.
+   * @param {string} packageId
+   * @returns {number}
+   */
+  getOpenCountToday(packageId) {
+    if (!packageId) return 0;
+    const todayStart = getTodayStart();
+    return this.events.filter(
+      e => e.timestamp >= todayStart &&
+           e.packageId === packageId &&
+           e.outcome === 'intercepted'
+    ).length;
+  }
+
+  /**
    * Get daily metrics derived from events.
-   * @returns {{ date, interventionsCompleted, bypasses, goalsChosen, estimatedDeferredMinutes }}
    */
   getDailyStats() {
-    const today = getTodayKey();
-    const todayStart = new Date(today).getTime();
+    const todayStart = getTodayStart();
     const todayEvents = this.events.filter(e => e.timestamp >= todayStart);
 
     const interventionsCompleted = todayEvents.filter(e => e.outcome === 'solved').length;
     const bypasses = todayEvents.filter(e => e.outcome === 'bypassed').length;
     const goalsChosen = todayEvents.filter(e => e.outcome === 'goals').length;
-    const protectedAttempts = todayEvents.length;
+    // Count interceptions only — every pause now logs one 'intercepted' event plus
+    // one outcome event, so counting all events would double-count.
+    const protectedAttempts = todayEvents.filter(e => e.outcome === 'intercepted').length;
 
-    // Estimate: each 'goals' outcome = 15 min deferred (labeled as estimate)
+    // Estimate: each 'goals' outcome = 15 min deferred (labeled as an estimate in the UI)
     const estimatedDeferredMinutes = goalsChosen * 15;
 
     return {
-      date: today,
+      date: getTodayKey(),
       interventionsCompleted,
       bypasses,
       goalsChosen,
       protectedAttempts,
       estimatedDeferredMinutes,
-      // Legacy compat
-      puzzlesSolved: interventionsCompleted,
-      interceptions: protectedAttempts,
-      timeSaved: estimatedDeferredMinutes,
-      puzzlesBypassed: bypasses,
     };
   }
 
   getTodayEvents() {
-    const today = getTodayKey();
-    const todayStart = new Date(today).getTime();
+    const todayStart = getTodayStart();
     return this.events.filter(e => e.timestamp >= todayStart);
   }
 

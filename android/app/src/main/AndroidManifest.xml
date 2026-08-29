@@ -32,11 +32,5 @@
       </intent-filter>
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config"/>
     </service>
-    <activity 
-      android:name=".InterventionActivity" 
-      android:exported="false"
-      android:theme="@style/Theme.App.SplashScreen"
-      android:launchMode="singleTop"
-      android:screenOrientation="portrait"/>
   </application>
 </manifest>

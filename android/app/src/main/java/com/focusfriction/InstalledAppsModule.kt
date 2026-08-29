@@ -1,17 +1,19 @@
 package com.focusfriction
 
-import android.content.Context
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Base64
+import android.util.LruCache
+import android.view.accessibility.AccessibilityManager
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -24,23 +26,29 @@ import java.io.ByteArrayOutputStream
 
 class InstalledAppsModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
+    companion object {
+        private const val ICON_PX = 72
+        // Decoding + rescaling + base64-encoding an icon costs real time, and list
+        // recycling asks for the same icon repeatedly as the user scrolls. ~200 icons
+        // at 72x72 PNG base64 is a few MB at most.
+        private val iconCache = object : LruCache<String, String>(256) {}
+    }
+
     override fun getName(): String {
         return "InstalledAppsModule"
     }
 
     private fun drawableToBase64(drawable: Drawable): String {
-        val bitmap = if (drawable is BitmapDrawable) {
-            drawable.bitmap
-        } else {
-            val bmp = Bitmap.createBitmap(drawable.intrinsicWidth.coerceAtLeast(1), drawable.intrinsicHeight.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bmp)
-            drawable.setBounds(0, 0, canvas.width, canvas.height)
-            drawable.draw(canvas)
-            bmp
-        }
+        // Render straight into a target-sized bitmap. The old path built a
+        // full-resolution bitmap and then rescaled it, doing twice the allocation.
+        val bmp = Bitmap.createBitmap(ICON_PX, ICON_PX, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        drawable.setBounds(0, 0, ICON_PX, ICON_PX)
+        drawable.draw(canvas)
+
         val stream = ByteArrayOutputStream()
-        val scaled = Bitmap.createScaledBitmap(bitmap, 72, 72, true)
-        scaled.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        bmp.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        bmp.recycle()
         return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
     }
 
@@ -79,9 +87,14 @@ class InstalledAppsModule(private val reactContext: ReactApplicationContext) : R
     @ReactMethod
     fun getAppIcon(packageId: String, promise: Promise) {
         try {
+            iconCache.get(packageId)?.let {
+                promise.resolve(it)
+                return
+            }
             val pm = reactContext.packageManager
             val icon = pm.getApplicationIcon(packageId)
             val base64 = drawableToBase64(icon)
+            iconCache.put(packageId, base64)
             promise.resolve(base64)
         } catch (e: Exception) {
             promise.reject("ICON_FETCH_ERROR", e)
@@ -91,12 +104,32 @@ class InstalledAppsModule(private val reactContext: ReactApplicationContext) : R
     @ReactMethod
     fun isAccessibilityServiceEnabled(promise: Promise) {
         try {
-            val enabledServices = Settings.Secure.getString(
+            val expected = ComponentName(reactContext.packageName, FocusAccessibilityService::class.java.name)
+            val manager = reactContext.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE)
+                as? AccessibilityManager
+
+            val viaManager = manager
+                ?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                ?.any { it.resolveInfo?.serviceInfo?.let { si -> si.packageName == expected.packageName && si.name == expected.className } == true }
+                ?: false
+
+            if (viaManager) {
+                promise.resolve(true)
+                return
+            }
+
+            // Fallback: parse the raw setting, accepting both the short and fully
+            // qualified component spellings that different OEMs write.
+            val raw = Settings.Secure.getString(
                 reactContext.contentResolver,
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-            val result = enabledServices?.contains("com.focusfriction/.FocusAccessibilityService") == true
-            promise.resolve(result)
+            ) ?: ""
+            val matched = raw.split(':').any { entry ->
+                ComponentName.unflattenFromString(entry)?.let {
+                    it.packageName == expected.packageName && it.className == expected.className
+                } == true
+            }
+            promise.resolve(matched)
         } catch (e: Exception) {
             promise.reject("ACCESSIBILITY_CHECK_ERROR", e)
         }
@@ -143,6 +176,12 @@ class InstalledAppsModule(private val reactContext: ReactApplicationContext) : R
             val solveGrantMinutes = if (params.hasKey("solveGrantMinutes")) params.getInt("solveGrantMinutes") else 10
             val bypassGrantMinutes = if (params.hasKey("bypassGrantMinutes")) params.getInt("bypassGrantMinutes") else 3
 
+            val frictionTypes = ArrayList<String>()
+            params.getArray("frictionTypes")?.let { arr ->
+                for (i in 0 until arr.size()) arr.getString(i)?.let(frictionTypes::add)
+            }
+            if (frictionTypes.isEmpty()) frictionTypes.add("math")
+
             FocusPolicyRepository.getInstance(reactContext).updatePolicy(
                 monitoredPackages = monitoredPackages,
                 isProtectionEnabled = isProtectionEnabled,
@@ -150,7 +189,8 @@ class InstalledAppsModule(private val reactContext: ReactApplicationContext) : R
                 scheduleStartMinute = scheduleStartMinute,
                 scheduleEndMinute = scheduleEndMinute,
                 solveGrantMinutes = solveGrantMinutes,
-                bypassGrantMinutes = bypassGrantMinutes
+                bypassGrantMinutes = bypassGrantMinutes,
+                frictionTypes = frictionTypes
             )
             promise.resolve(true)
         } catch (e: Exception) {
@@ -168,9 +208,9 @@ class InstalledAppsModule(private val reactContext: ReactApplicationContext) : R
     }
 
     @ReactMethod
-    fun requestOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(reactContext)) {
+    fun requestOverlayPermission(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactContext)) {
                 val intent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + reactContext.packageName)
@@ -178,6 +218,9 @@ class InstalledAppsModule(private val reactContext: ReactApplicationContext) : R
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 reactContext.startActivity(intent)
             }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("OVERLAY_PERMISSION_ERROR", e)
         }
     }
 }
