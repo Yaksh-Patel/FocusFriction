@@ -61,3 +61,8 @@ yarn-error.*
 
 # release signing credentials — never commit
 /android/keystore.properties
+
+# never let signing backups into the repo again
+*.zip
+*.jks
+*.p12
