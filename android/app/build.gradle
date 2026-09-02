@@ -105,18 +105,29 @@ android {
             keyPassword 'android'
         }
         release {
-            // Credentials live in android/keystore.properties, which is gitignored.
-            // A fresh clone has no such file, so release falls back to the debug key
-            // and still builds — it just produces an APK you must not distribute.
-            def props = new Properties()
-            def propsFile = rootProject.file('keystore.properties')
+            // Signing credentials deliberately live OUTSIDE the working tree, in
+            // ~/.focusfriction by default (override with FF_SIGNING_DIR). The first
+            // release key was lost to a blanket `git add` that swept a backup zip
+            // into a public repo; keeping the material out of the tree entirely is
+            // the only version of this that can't recur.
+            //
+            // Falls back to the debug key when the file is absent so a fresh clone
+            // still builds — loudly, because a release APK signed with the debug
+            // key must not be distributed.
+            def signingDir = System.getenv('FF_SIGNING_DIR') ?:
+                "${System.getProperty('user.home')}/.focusfriction"
+            def propsFile = new File(signingDir, 'keystore.properties')
+
             if (propsFile.exists()) {
+                def props = new Properties()
                 propsFile.withInputStream { props.load(it) }
                 storeFile file(props['storeFile'])
                 storePassword props['storePassword']
                 keyAlias props['keyAlias']
                 keyPassword props['keyPassword']
             } else {
+                logger.warn("WARNING: no keystore.properties in ${signingDir} — " +
+                            "signing release with the DEBUG key. Do not distribute this APK.")
                 storeFile file('debug.keystore')
                 storePassword 'android'
                 keyAlias 'androiddebugkey'
