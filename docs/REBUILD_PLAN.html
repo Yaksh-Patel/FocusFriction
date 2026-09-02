@@ -361,6 +361,7 @@ tbody td:last-child{color:var(--ink-soft);}
   font-variant-numeric:tabular-nums;
 }
 .phase.active .phase-num{color:var(--accent);}
+.phase.done .phase-num{color:var(--done);}
 .phase .phase-num{color:var(--done);}
 .phase-head{
   display:flex;
@@ -495,7 +496,7 @@ a:focus-visible,summary:focus-visible{
     <div class="hatch" aria-hidden="true"></div>
     <div class="eyebrow">
       <span>Android &middot; Expo SDK 57 &middot; Kotlin</span>
-      <span>Reviewed 29 Aug 2026</span>
+      <span>Reviewed 29 Aug 2026 &middot; shipped 2 Sep 2026</span>
     </div>
     <h1>FocusFriction Rebuild</h1>
     <p class="standfirst">A code review of the old app, and the four-phase rebuild &mdash; now complete &mdash; that turned it into a notes app worth opening daily, one that also pauses the apps you keep reaching for.</p>
@@ -550,7 +551,14 @@ a:focus-visible,summary:focus-visible{
 
     <p>The scaffolding for the right answer is already in the tree and unused: <code>canDrawOverlays</code> and <code>requestOverlayPermission</code> sit in <code>InstalledAppsModule.kt</code>, and older builds showed an &ldquo;Overlay Permission Required&rdquo; banner. But <code>SYSTEM_ALERT_WINDOW</code> is declared only in <code>app.json</code> &mdash; which does nothing, because <code>android/</code> is committed and prebuild never runs. The real manifest has never had the permission.</p>
 
-    <p><strong>The fix:</strong> a foreground service that draws a Jetpack Compose view into a <code>TYPE_APPLICATION_OVERLAY</code> window, directly on top of the paused app. No activity launch, no React Native boot, no task race &mdash; and note headings rendered over the thing you were about to scroll.</p>
+    <p><strong>The fix, as planned:</strong> draw the pause into a system overlay window instead of launching anything. No React Native boot, no task race.</p>
+
+    <div class="finding" style="border-left:2px solid var(--accent);">
+      <span class="finding-label">What actually shipped</span>
+      <p>The overlay was built twice and abandoned. A <code>TYPE_ACCESSIBILITY_OVERLAY</code> window needs no permissions and cannot be hidden by the app underneath &mdash; but it is layered above the status bar, the navigation bar <em>and</em> the keyguard. On device that meant the notification shade would not open, the nav buttons were dead, other apps were unreachable, and unlocking the phone returned to the pause screen. The user was trapped.</p>
+      <p>The shipped answer is <code>PauseActivity</code>: a plain native Activity. It keeps every property that mattered &mdash; native, instant, no bridge &mdash; and drops the one that caused the damage. The original design's real mistake was never &ldquo;an Activity&rdquo;; it was chaining from one Activity into the React Native app and racing its startup.</p>
+      <p>A second thing changed for the same reason: the pause screen uses no keyboard at all. An <code>EditText</code> in a non-activity window gave no cursor, could not be dismissed, and covered the card. Math got a keypad; the typing challenge became tap-the-words-in-order.</p>
+    </div>
   </section>
 
   <section>
@@ -634,7 +642,7 @@ a:focus-visible,summary:focus-visible{
 
     <div class="phases">
 
-      <article class="phase active">
+      <article class="phase done">
         <div class="phase-num">01</div>
         <div class="phase-head">
           <h3>Make the current app honest</h3>
@@ -644,27 +652,27 @@ a:focus-visible,summary:focus-visible{
         <p class="phase-dep">No dependencies &middot; fully testable alone</p>
       </article>
 
-      <article class="phase">
+      <article class="phase done">
         <div class="phase-num">02</div>
         <div class="phase-head">
-          <h3>The native overlay</h3>
+          <h3>The native pause screen</h3>
           <span class="status done">Done</span>
         </div>
-        <p class="phase-body"><strong>Shipped differently, and better.</strong> Instead of a foreground service holding a <code>TYPE_APPLICATION_OVERLAY</code>, the accessibility service adds a <code>TYPE_ACCESSIBILITY_OVERLAY</code> window directly: no <code>SYSTEM_ALERT_WINDOW</code> permission, immune to <code>setHideOverlayWindows()</code>, and no second service to keep alive. Plain Android views rather than Compose, which kept several MB out of the APK. Challenge generation, difficulty and outcome logging all moved to Kotlin, because no JavaScript is alive at interception time. <code>InterventionActivity</code>, <code>InterventionModule</code> and <code>InterventionScreen.js</code> deleted.</p>
+        <p class="phase-body"><strong>Shipped as an Activity, not an overlay.</strong> Two overlay designs were built and abandoned &mdash; see the correction above. The friction screen is <code>PauseActivity</code>: plain native Kotlin, no React Native, no bridge, no cold start, and an ordinary window that leaves the shade, nav bar and keyguard alone. Plain Android views rather than Compose, which kept several MB out of the APK. Challenge generation, difficulty and outcome logging all moved to Kotlin, because no JavaScript is alive at interception time. <code>InterventionActivity</code>, <code>InterventionModule</code> and <code>InterventionScreen.js</code> deleted.</p>
         <p class="phase-dep">Needs 01 &middot; deletes code 01 repaired</p>
       </article>
 
-      <article class="phase">
+      <article class="phase done">
         <div class="phase-num">03</div>
         <div class="phase-head">
           <h3>Notes at the centre</h3>
           <span class="status done">Done</span>
         </div>
-        <p class="phase-body">Replace flat tasks with a real note model &mdash; title, body, checklist items, colour, pinned, archived, labels, timestamps &mdash; on <code>expo-sqlite</code> with a full-text index. Keep-style masonry grid, editor, undo-on-delete, search. Notes take over as the home surface and the setup checklist stops gating it, so the app is useful before any permission is granted. A compact heading projection is mirrored into shared storage on every write so the overlay can read it synchronously.</p>
-        <p class="phase-dep">Needs 02 &middot; overlay is the consumer</p>
+        <p class="phase-body">Replace flat tasks with a real note model &mdash; title, body, checklist items, colour, pinned, archived, labels, timestamps &mdash; on <code>expo-sqlite</code>. Keep-style masonry grid, editor, undo-on-delete, search. Notes take over as the home surface and the setup checklist stops gating it, so the app is useful before any permission is granted. A compact heading projection is mirrored into shared storage on every write so the pause screen can read it synchronously.</p>
+        <p class="phase-dep">Needs 02 &middot; the pause screen is the consumer</p>
       </article>
 
-      <article class="phase">
+      <article class="phase done">
         <div class="phase-num">04</div>
         <div class="phase-head">
           <h3>Material 3 Expressive</h3>
@@ -689,8 +697,8 @@ a:focus-visible,summary:focus-visible{
       </div>
       <div class="decision">
         <dt>Interception</dt>
-        <dd>Foreground service, Compose overlay window</dd>
-        <p class="why">Over patching the activity relaunch. The race condition and the lockout bug are properties of that design, not bugs within it.</p>
+        <dd>Native PauseActivity</dd>
+        <p class="why">Revised during the build. A system overlay window trapped the user above the status bar, nav bar and keyguard; a normal Activity keeps the speed and drops the trap.</p>
       </div>
       <div class="decision">
         <dt>Visual scope</dt>

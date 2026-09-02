@@ -58,3 +58,6 @@ yarn-error.*
 # build output
 *.apk
 *.aab
+
+# release signing credentials — never commit
+/android/keystore.properties
